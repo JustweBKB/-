@@ -5,10 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="theme-color" content="#FAF7F0" />
+<meta name="theme-color" content="#111316" />
 <title>Hourly Ledger</title>
 <style>
   :root {
+    /* fonts shared by both themes — unified monospace (VS Code feel) */
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --serif: var(--mono);
+    --sans: var(--mono);
+  }
+  /* ===== THEME: Dark (default) ===== */
+  :root, [data-theme="dark"] {
+    --paper: #1A1C1F;        /* panels / cards */
+    --paper-deep: #111316;   /* app background */
+    --ink: #E8EAED;          /* primary text */
+    --rule: #2E3338;         /* borders / dividers */
+    --accent: #FF5C57;       /* highlight: totals, emphasis */
+    --muted: #8A9199;        /* secondary text */
+    --good: #3FB950;         /* paid / success */
+  }
+  /* ===== THEME: Paper (original warm) ===== */
+  [data-theme="paper"] {
     --paper: #FAF7F0;
     --paper-deep: #F2EDE0;
     --ink: #2A2724;
@@ -16,11 +33,30 @@
     --accent: #C1432F;
     --muted: #9C9484;
     --good: #5B7B53;
-    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-    --serif: Georgia, 'Times New Roman', serif;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  /* ---- dark-only surface overrides (retarget hardcoded #fff to dark) ---- */
+  [data-theme="dark"] .icon-btn-wide, [data-theme="dark"] .icon-btn,
+  [data-theme="dark"] .chip, [data-theme="dark"] .round-btn,
+  [data-theme="dark"] .btn-ghost, [data-theme="dark"] .btn-danger-ghost { background: var(--paper) !important; }
+  [data-theme="dark"] .cal-cell { background: #15171A !important; }
+  [data-theme="dark"] .cal-cell .daynum { background: rgba(0,0,0,0.5) !important; color: var(--ink) !important; }
+  [data-theme="dark"] .day-entry-card, [data-theme="dark"] .participant-row,
+  [data-theme="dark"] .sheet, [data-theme="dark"] .lock-card,
+  [data-theme="dark"] .summary-section { background: var(--paper); }
+  [data-theme="dark"] input[type=text], [data-theme="dark"] input[type=number],
+  [data-theme="dark"] input[type=date], [data-theme="dark"] input[type=time],
+  [data-theme="dark"] textarea, [data-theme="dark"] .minutes-input { color: var(--ink); }
+  [data-theme="dark"] input[type=date], [data-theme="dark"] input[type=time] { color-scheme: dark; }
+
+  /* monospace titles: tighten tracking so they read crisp, not sprawling */
+  .brand, .cal-month, .sheet-title, .summary-title, .lock-card h2,
+  .day-sheet-title, #importTitle {
+    letter-spacing: -0.02em;
+  }
+  .brand { font-size: 17px; }   /* mono runs wide — nudge the wordmark down a touch */
+
   /* Lock the whole page so it never scrolls or rubber-bands as a unit —
      only the inner content area scrolls. Makes it feel like a native app. */
   html, body {
@@ -255,6 +291,7 @@
     <div class="topbar-row">
       <div class="brand">Hourly Ledger</div>
       <div class="icon-row">
+        <button class="icon-btn" id="btnTheme" aria-label="Switch theme" title="Switch theme">🌙</button>
         <button class="icon-btn-wide" id="btnDownload" aria-label="Backup">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           <span>Backup</span>
@@ -409,6 +446,27 @@
   var ENC_KEY = "hourlyLedgerData_v2_enc"; // encrypted blob {salt, iv, ct}
   var OLD_PLAIN_KEY = "hourlyLedgerData_v1"; // legacy un-encrypted (migrated once)
   var PW_REMEMBER_KEY = "ledger_pw_remember"; // this-device remembered password
+  var THEME_KEY = "ledger_theme"; // "dark" | "paper"
+
+  // ---------- theme ----------
+  function currentTheme(){
+    return document.documentElement.getAttribute("data-theme") || "dark";
+  }
+  function applyTheme(name){
+    document.documentElement.setAttribute("data-theme", name);
+    var btn = document.getElementById("btnTheme");
+    if (btn) btn.textContent = (name === "dark") ? "🌙" : "☀️";
+    // keep the iOS status-bar tint in sync with the background
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", name === "dark" ? "#111316" : "#F2EDE0");
+    try { localStorage.setItem(THEME_KEY, name); } catch(e) {}
+  }
+  // apply saved theme immediately (before render) to avoid a flash
+  (function initThemeEarly(){
+    var saved = "dark";
+    try { saved = localStorage.getItem(THEME_KEY) || "dark"; } catch(e) {}
+    document.documentElement.setAttribute("data-theme", saved);
+  })();
   var COLORS = [
     "#E2725B","#D98E3B","#C9A227","#7A8B4F","#4F8B82",
     "#5B7B9C","#6B5B95","#95527A","#8A7B6C","#4A4541"
@@ -1010,9 +1068,14 @@
     var ctx = canvas.getContext("2d");
     ctx.scale(DPR, DPR);
 
-    // palette (matches the app)
-    var PAPER = "#FAF7F0", INK = "#2A2724", RULE = "#D8D2C4",
-        ACCENT = "#C1432F", MUTED = "#9C9484";
+    // palette follows the active theme so the exported image matches
+    var dark = currentTheme() === "dark";
+    var PAPER = dark ? "#111316" : "#FAF7F0",
+        CARD  = dark ? "#1A1C1F" : "#FFFFFF",
+        INK   = dark ? "#E8EAED" : "#2A2724",
+        RULE  = dark ? "#2E3338" : "#D8D2C4",
+        ACCENT= dark ? "#FF5C57" : "#C1432F",
+        MUTED = dark ? "#8A9199" : "#9C9484";
 
     ctx.fillStyle = PAPER;
     ctx.fillRect(0, 0, W, H);
@@ -1020,14 +1083,14 @@
     var y = pad + 24;
     // title
     ctx.fillStyle = INK;
-    ctx.font = "700 30px Georgia, serif";
+    ctx.font = "700 28px ui-monospace, Menlo, Consolas, monospace";
     ctx.textBaseline = "alphabetic";
     ctx.fillText(MONTH_ABBR[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear(), pad, y);
     y += 34;
 
     if (!dayEntries.length) {
       ctx.fillStyle = MUTED;
-      ctx.font = "18px -apple-system, sans-serif";
+      ctx.font = "18px ui-monospace, Menlo, Consolas, monospace";
       ctx.fillText("No entries for this day", pad, y + 30);
     } else {
       dayEntries.forEach(function(entry){
@@ -1037,7 +1100,7 @@
         var cardH = cardPad*2 + headH + entry.participants.length * lineH;
 
         // card background
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = CARD;
         roundRect(ctx, pad, cardTop, W - pad*2, cardH, 12);
         ctx.fill();
         ctx.strokeStyle = RULE; ctx.lineWidth = 1; ctx.stroke();
@@ -1073,7 +1136,7 @@
           ctx.beginPath(); ctx.arc(pad + cardPad + 8, rowY - 5, 8, 0, Math.PI*2); ctx.fill();
           // name
           ctx.fillStyle = INK;
-          ctx.font = "18px -apple-system, sans-serif";
+          ctx.font = "18px ui-monospace, Menlo, Consolas, monospace";
           ctx.textAlign = "left";
           ctx.fillText(name, pad + cardPad + 26, rowY);
           // time range
@@ -1449,6 +1512,12 @@
     saveState();
     renderCalendar();
     closeSheets();
+  });
+
+  // ---------- theme toggle ----------
+  applyTheme(currentTheme()); // sync the button icon + meta on load
+  $("#btnTheme").addEventListener("click", function(){
+    applyTheme(currentTheme() === "dark" ? "paper" : "dark");
   });
 
   // ---------- import / export (encrypted) ----------
