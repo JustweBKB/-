@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#FAF7F0" />
-<title>计时账本</title>
+<title>Hourly Ledger</title>
 <style>
   :root {
     --paper: #FAF7F0;
@@ -181,6 +181,18 @@
 
   input[type=file] { display:none; }
 
+  /* generated-image viewer */
+  .img-overlay {
+    position:fixed; inset:0; z-index:120; background:rgba(42,39,36,0.92);
+    display:none; align-items:center; justify-content:center; padding:20px;
+    overflow-y:auto;
+  }
+  .img-overlay.show { display:flex; }
+  .img-overlay-inner { width:100%; max-width:420px; text-align:center; }
+  .img-overlay .img-tip { color:#fff; font-size:13px; margin:0 0 12px; opacity:0.85; }
+  .img-overlay img { width:100%; height:auto; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,0.4); }
+  .img-overlay .btn { max-width:160px; margin-left:auto; margin-right:auto; }
+
   /* password gate */
   .lock-screen {
     position:fixed; inset:0; z-index:200; background: var(--paper-deep);
@@ -211,12 +223,12 @@
 <div class="lock-screen" id="lockScreen" style="display:none;">
   <div class="lock-card">
     <div class="lock-emoji">🔒</div>
-    <h2 id="lockTitle">输入密码</h2>
-    <p id="lockSubtitle">请输入密码以解锁你的账本</p>
-    <input type="password" id="lockInput" inputmode="text" autocomplete="off" placeholder="密码" />
-    <input type="password" id="lockInput2" inputmode="text" autocomplete="off" placeholder="再次输入密码" style="display:none;" />
+    <h2 id="lockTitle">Enter Password</h2>
+    <p id="lockSubtitle">Enter your password to unlock your ledger</p>
+    <input type="password" id="lockInput" inputmode="text" autocomplete="off" placeholder="Password" />
+    <input type="password" id="lockInput2" inputmode="text" autocomplete="off" placeholder="Confirm password" style="display:none;" />
     <div class="lock-err" id="lockErr"></div>
-    <button id="lockBtn">解锁</button>
+    <button id="lockBtn">Unlock</button>
     <div class="lock-hint" id="lockHint"></div>
   </div>
 </div>
@@ -224,18 +236,18 @@
 <div class="app">
   <header class="topbar">
     <div class="topbar-row">
-      <div class="brand">计时账本</div>
+      <div class="brand">Hourly Ledger</div>
       <div class="icon-row">
-        <button class="icon-btn-wide" id="btnDownload">⬇ 备份</button>
-        <button class="icon-btn-wide" id="btnUpload">⬆ 导入</button>
+        <button class="icon-btn-wide" id="btnDownload">⬇ Backup</button>
+        <button class="icon-btn-wide" id="btnUpload">⬆ Import</button>
       </div>
     </div>
     <div id="storageWarning" style="display:none; font-size:11px; color:#C1432F; margin-top:8px; font-family:var(--mono);">
-      ⚠️ 此设备无法自动保存，请每次使用后点"备份"导出文件，否则关闭页面会丢失数据
+      ⚠️ This device can't auto-save. Tap "Backup" to export a file after each use, or your data will be lost when the page closes.
     </div>
     <div class="tabs">
-      <div class="tab active" data-tab="calendar">日历</div>
-      <div class="tab" data-tab="members">成员</div>
+      <div class="tab active" data-tab="calendar">Calendar</div>
+      <div class="tab" data-tab="members">Members</div>
     </div>
   </header>
 
@@ -247,16 +259,15 @@
     </div>
     <div class="cal-grid" id="calDow"></div>
     <div class="cal-grid" id="calGrid" style="margin-top:4px;"></div>
-    <div class="cal-legend">实色条＝已付　斜纹条＝未付</div>
     <div class="summary-section">
-      <div class="summary-title">本月汇总</div>
+      <div class="summary-title">Monthly Summary</div>
       <div id="monthSummary"></div>
     </div>
   </main>
 
   <main id="view-members" style="display:none;">
     <div id="memberList"></div>
-    <div class="add-row" id="btnAddMember">＋ 添加成员</div>
+    <div class="add-row" id="btnAddMember">＋ Add Member</div>
   </main>
 
   <button class="fab" id="fabAdd">＋</button>
@@ -267,37 +278,46 @@
 <div class="overlay" id="overlay"></div>
 <div class="toast" id="toast"></div>
 
+<!-- generated-image viewer: shows the rendered PNG so the user can long-press to save/share -->
+<div class="img-overlay" id="imgOverlay">
+  <div class="img-overlay-inner">
+    <p class="img-tip">Long-press the image to save or share</p>
+    <img id="shotImg" alt="ledger image" />
+    <button class="btn btn-ghost" id="imgCloseBtn" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
 <div class="sheet" id="sheetMember">
   <div class="sheet-handle"></div>
-  <div class="sheet-title" id="memberSheetTitle">添加成员</div>
+  <div class="sheet-title" id="memberSheetTitle">Add Member</div>
   <div class="field">
-    <label>姓名</label>
-    <input type="text" id="memberNameInput" maxlength="12" placeholder="例如：小李" />
+    <label>Name</label>
+    <input type="text" id="memberNameInput" maxlength="12" placeholder="e.g. Alex" />
   </div>
   <div class="field">
-    <label>颜色</label>
+    <label>Colour</label>
     <div class="color-grid" id="colorGrid"></div>
   </div>
   <div class="btn-row">
-    <button class="btn btn-ghost" id="memberCancelBtn">取消</button>
-    <button class="btn btn-primary" id="memberSaveBtn">保存</button>
+    <button class="btn btn-ghost" id="memberCancelBtn">Cancel</button>
+    <button class="btn btn-primary" id="memberSaveBtn">Save</button>
   </div>
-  <button class="btn btn-danger-ghost" id="memberDeleteBtn" style="display:none; width:100%; margin-top:10px;">删除成员</button>
+  <button class="btn btn-danger-ghost" id="memberDeleteBtn" style="display:none; width:100%; margin-top:10px;">Delete Member</button>
 </div>
 
 <div class="sheet" id="sheetEntry">
   <div class="sheet-handle"></div>
-  <div class="sheet-title" id="entrySheetTitle">新增账目</div>
+  <div class="sheet-title" id="entrySheetTitle">New Entry</div>
   <div class="field">
-    <label>日期</label>
+    <label>Date</label>
     <input type="date" id="entryDateInput" />
   </div>
   <div class="field">
-    <label>单价（元/小时）</label>
+    <label>Rate ($/hour)</label>
     <input type="number" id="entryRateInput" inputmode="decimal" />
   </div>
   <div class="field">
-    <label>时间段</label>
+    <label>Time Range</label>
     <div style="display:flex; align-items:center; gap:8px;">
       <input type="time" id="entryStartInput" style="flex:1;" />
       <span style="color:var(--muted);">–</span>
@@ -305,30 +325,33 @@
     </div>
   </div>
   <div class="field">
-    <label>参与人（点击添加 / 取消）</label>
+    <label>Participants (tap to add / remove)</label>
     <div class="chip-row" id="memberChips"></div>
   </div>
   <div class="field" id="participantsBlock">
-    <label>每人参与到几点 &amp; 付款</label>
+    <label>Each person's time</label>
     <div id="participantList"></div>
   </div>
   <div class="sheet-total">
-    <span class="label">合计</span>
-    <span class="value" id="entryTotalValue">¥0.00</span>
+    <span class="label">Total</span>
+    <span class="value" id="entryTotalValue">$0.00</span>
   </div>
   <div class="btn-row">
-    <button class="btn btn-ghost" id="entryCancelBtn">取消</button>
-    <button class="btn btn-primary" id="entrySaveBtn">保存</button>
+    <button class="btn btn-ghost" id="entryCancelBtn">Cancel</button>
+    <button class="btn btn-primary" id="entrySaveBtn">Save</button>
   </div>
-  <button class="btn btn-danger-ghost" id="entryDeleteBtn" style="display:none; width:100%; margin-top:10px;">删除这条账目</button>
+  <button class="btn btn-danger-ghost" id="entryDeleteBtn" style="display:none; width:100%; margin-top:10px;">Delete This Entry</button>
 </div>
 
 <div class="sheet" id="sheetDay">
   <div class="sheet-handle"></div>
-  <div class="sheet-title" id="daySheetTitle">6月20日</div>
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+    <div class="sheet-title" id="daySheetTitle" style="margin-bottom:0;">Jun 20</div>
+    <button class="icon-btn" id="dayShotBtn" title="Save as image">📷</button>
+  </div>
   <div id="dayEntryList"></div>
   <div class="btn-row">
-    <button class="btn btn-primary" id="dayAddEntryBtn">＋ 新增这天的账目</button>
+    <button class="btn btn-primary" id="dayAddEntryBtn">＋ Add Entry for This Day</button>
   </div>
 </div>
 
@@ -344,7 +367,10 @@
     "#E2725B","#D98E3B","#C9A227","#7A8B4F","#4F8B82",
     "#5B7B9C","#6B5B95","#95527A","#8A7B6C","#4A4541"
   ];
-  var DOW_LABELS = ["日","一","二","三","四","五","六"];
+  var DOW_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var MONTH_NAMES = ["January","February","March","April","May","June",
+                     "July","August","September","October","November","December"];
+  var MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   // ---------- state (populated AFTER the password gate unlocks) ----------
   var state = { members: [], entries: [] };
@@ -572,15 +598,15 @@
       ta.focus(); ta.select();
       try {
         document.execCommand("copy");
-        showToast("已复制明细到剪贴板");
+        showToast("Copied summary to clipboard");
       } catch(e) {
-        alert("复制失败，请手动复制：\n" + text);
+        alert("Copy failed. Please copy manually:\n" + text);
       }
       document.body.removeChild(ta);
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function(){
-        showToast("已复制明细到剪贴板");
+        showToast("Copied summary to clipboard");
       }).catch(fallback);
     } else {
       fallback();
@@ -616,7 +642,7 @@
 
   // ---------- calendar rendering ----------
   function renderCalendar(){
-    $("#calMonthLabel").textContent = calYear + "年" + (calMonth+1) + "月";
+    $("#calMonthLabel").textContent = MONTH_NAMES[calMonth] + " " + calYear;
     $("#calDow").innerHTML = DOW_LABELS.map(function(d){ return '<div class="cal-dow">'+d+'</div>'; }).join("");
 
     var firstOfMonth = new Date(calYear, calMonth, 1);
@@ -657,18 +683,13 @@
         var order = [];
         dayEntries.forEach(function(e){
           e.participants.forEach(function(p){
-            if (!seen[p.memberId]) { seen[p.memberId] = { allPaid: true }; order.push(p.memberId); }
-            if (!p.paid) seen[p.memberId].allPaid = false;
+            if (!seen[p.memberId]) { seen[p.memberId] = true; order.push(p.memberId); }
           });
         });
         var bars = order.slice(0,8).map(function(id){
           var mem = memberById(id);
           var color = mem ? mem.color : "#9C9484";
-          var allPaid = seen[id].allPaid;
-          var bg = allPaid
-            ? color
-            : "repeating-linear-gradient(45deg, " + color + ", " + color + " 3px, " + color + "55 3px, " + color + "55 6px)";
-          return '<div class="cal-bar" style="background:'+bg+';"></div>';
+          return '<div class="cal-bar" style="background:'+color+';"></div>';
         });
         barsHtml = '<div class="cal-bars">' + bars.join("") + '</div>';
       }
@@ -726,21 +747,21 @@
     var totals = computeMonthlySummary();
     var ids = Object.keys(totals);
     if (!ids.length) {
-      $("#monthSummary").innerHTML = '<div class="empty-hint" style="padding:16px 0;">这个月还没有账目</div>';
+      $("#monthSummary").innerHTML = '<div class="empty-hint" style="padding:16px 0;">No entries this month</div>';
       return;
     }
     ids.sort(function(a,b){ return totals[b].amount - totals[a].amount; });
     $("#monthSummary").innerHTML = ids.map(function(id){
       var mem = memberById(id);
-      var name = mem ? mem.name : "（已删除成员）";
+      var name = mem ? mem.name : "(deleted member)";
       var color = mem ? mem.color : "#9C9484";
       var t = totals[id];
       var allPaid = t.paidCount === t.totalCount;
       return '<div class="summary-row">'
         + '<span class="swatch" style="background:'+color+'"></span>'
         + '<span class="summary-name" data-id="'+id+'" data-name="'+escapeHtml(name)+'" data-amount="'+t.amount.toFixed(2)+'">'+escapeHtml(name)+'</span>'
-        + '<span class="summary-amount">¥'+fmtMoney(t.amount)+'</span>'
-        + '<span class="paid-toggle'+(allPaid?' paid':'')+' summary-paid-toggle" data-id="'+id+'">'+(allPaid?'已付':'未付')+'</span>'
+        + '<span class="summary-amount">$'+fmtMoney(t.amount)+'</span>'
+        + '<span class="paid-toggle'+(allPaid?' paid':'')+' summary-paid-toggle" data-id="'+id+'">'+(allPaid?'Paid':'Unpaid')+'</span>'
         + '</div>';
     }).join("");
 
@@ -771,14 +792,14 @@
   }
 
   // build a per-day breakdown for one member, e.g.
-  //   2026年2月 小李
-  //   1号 30分钟 ¥10.00
-  //   2号 30分钟 ¥10.00
+  //   Feb 2026 — Alex
+  //   1: 30 min  $10.00
+  //   2: 30 min  $10.00
   //   ——————————
-  //   总计： ¥20.00
+  //   Total: $20.00
   function buildMemberDetail(memberId){
     var mem = memberById(memberId);
-    var name = mem ? mem.name : "（已删除成员）";
+    var name = mem ? mem.name : "(deleted member)";
     // gather this member's entries in the current month, summed per day
     var perDay = {}; // dayNum -> { minutes, amount }
     monthEntries().forEach(function(e){
@@ -796,11 +817,11 @@
     var lines = days.map(function(day){
       var d = perDay[day];
       total += d.amount;
-      return day + "号 " + d.minutes + "分钟 ¥" + fmtMoney(d.amount);
+      return day + ": " + d.minutes + " min  $" + fmtMoney(d.amount);
     });
-    var header = calYear + "年" + (calMonth+1) + "月 " + name;
+    var header = MONTH_ABBR[calMonth] + " " + calYear + " — " + name;
     return [header].concat(lines)
-      .concat(["——————————", "总计： ¥" + fmtMoney(total)])
+      .concat(["——————————", "Total: $" + fmtMoney(total)])
       .join("\n");
   }
 
@@ -808,19 +829,19 @@
   function openDaySheet(iso){
     selectedDayISO = iso;
     var d = parseISO(iso);
-    $("#daySheetTitle").textContent = (d.getMonth()+1) + "月" + d.getDate() + "日";
+    $("#daySheetTitle").textContent = MONTH_ABBR[d.getMonth()] + " " + d.getDate();
 
     var dayEntries = state.entries.filter(function(e){ return e.date === iso; });
     var html;
     if (!dayEntries.length) {
-      html = '<div class="empty-hint">这天还没有账目</div>';
+      html = '<div class="empty-hint">No entries for this day</div>';
     } else {
       html = dayEntries.map(function(entry){
         var costs = computeCosts(entry.participants, entry.rate);
         var total = entryTotal(entry);
         var rows = entry.participants.map(function(p){
           var mem = memberById(p.memberId);
-          var name = mem ? mem.name : "（已删除成员）";
+          var name = mem ? mem.name : "(deleted member)";
           var color = mem ? mem.color : "#9C9484";
           var startMin = timeStrToMinutes(entry.startTime);
           var joinClock = minutesToTimeStr(startMin + p.joinMinutes);
@@ -830,20 +851,20 @@
             + '<span class="swatch" style="width:14px;height:14px;background:'+color+'"></span>'
             + '<span style="flex:1; font-size:13.5px;">'+escapeHtml(name)+'</span>'
             + '<span style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-right:8px;">'+joinClock+'–'+leaveClock+'</span>'
-            + '<span class="cost-amount">¥'+fmtMoney(costs[p.memberId]||0)+'</span>'
+            + '<span class="cost-amount">$'+fmtMoney(costs[p.memberId]||0)+'</span>'
             + '</div>'
             + '</div>';
         }).join("");
 
         return '<div class="day-entry-card">'
           + '<div class="day-entry-head">'
-          + '<span class="day-entry-meta">¥'+entry.rate+'/时 · '+entry.startTime+'–'+entry.endTime+'</span>'
-          + '<span class="day-entry-total">¥'+fmtMoney(total)+'</span>'
+          + '<span class="day-entry-meta">$'+entry.rate+'/hr · '+entry.startTime+'–'+entry.endTime+'</span>'
+          + '<span class="day-entry-total">$'+fmtMoney(total)+'</span>'
           + '</div>'
           + rows
           + '<div class="btn-row" style="margin-top:10px;">'
-          + '<button class="btn btn-ghost edit-entry-btn" data-id="'+entry.id+'">编辑</button>'
-          + '<button class="btn btn-danger-ghost quick-delete-btn" data-id="'+entry.id+'">删除</button>'
+          + '<button class="btn btn-ghost edit-entry-btn" data-id="'+entry.id+'">Edit</button>'
+          + '<button class="btn btn-danger-ghost quick-delete-btn" data-id="'+entry.id+'">Delete</button>'
           + '</div>'
           + '</div>';
       }).join("");
@@ -856,7 +877,7 @@
     });
     $$(".quick-delete-btn").forEach(function(btn){
       btn.addEventListener("click", function(){
-        if (!confirm("删除这条账目？")) return;
+        if (!confirm("Delete this entry?")) return;
         var id = btn.getAttribute("data-id");
         state.entries = state.entries.filter(function(e){ return e.id !== id; });
         saveState();
@@ -876,17 +897,159 @@
     openEntrySheet(null, selectedDayISO || todayISO());
   });
 
+  // ---------- day screenshot (native Canvas render, no external libs) ----------
+  // draws the current day's entries to a PNG and shows it so the user can
+  // long-press to save / share (iOS can't trigger a system screenshot from web).
+  function renderDayImage(iso){
+    var d = parseISO(iso);
+    var dayEntries = state.entries.filter(function(e){ return e.date === iso; });
+
+    var DPR = 2; // crisp on retina
+    var W = 720;             // logical px
+    var pad = 36;
+    // measure height: title + per-entry (header + rows)
+    var lineH = 46, headH = 58, cardGap = 22, cardPad = 20;
+    var titleH = 100; // matches y = pad+24+34 before the first card, with slack
+    var bodyH = titleH;
+    if (!dayEntries.length) {
+      bodyH += 80;
+    } else {
+      dayEntries.forEach(function(e){
+        bodyH += cardGap + cardPad*2 + headH + e.participants.length * lineH;
+      });
+    }
+    bodyH += pad; // bottom padding
+    var H = bodyH;
+
+    var canvas = document.createElement("canvas");
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(DPR, DPR);
+
+    // palette (matches the app)
+    var PAPER = "#FAF7F0", INK = "#2A2724", RULE = "#D8D2C4",
+        ACCENT = "#C1432F", MUTED = "#9C9484";
+
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(0, 0, W, H);
+
+    var y = pad + 24;
+    // title
+    ctx.fillStyle = INK;
+    ctx.font = "700 30px Georgia, serif";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(MONTH_ABBR[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear(), pad, y);
+    y += 34;
+
+    if (!dayEntries.length) {
+      ctx.fillStyle = MUTED;
+      ctx.font = "18px -apple-system, sans-serif";
+      ctx.fillText("No entries for this day", pad, y + 30);
+    } else {
+      dayEntries.forEach(function(entry){
+        var costs = computeCosts(entry.participants, entry.rate);
+        var total = entryTotal(entry);
+        var cardTop = y + cardGap;
+        var cardH = cardPad*2 + headH + entry.participants.length * lineH;
+
+        // card background
+        ctx.fillStyle = "#ffffff";
+        roundRect(ctx, pad, cardTop, W - pad*2, cardH, 12);
+        ctx.fill();
+        ctx.strokeStyle = RULE; ctx.lineWidth = 1; ctx.stroke();
+
+        var cy = cardTop + cardPad + 22;
+        // entry header: rate/time + total
+        ctx.fillStyle = MUTED;
+        ctx.font = "16px ui-monospace, monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("$" + entry.rate + "/hr · " + entry.startTime + "–" + entry.endTime, pad + cardPad, cy);
+        ctx.fillStyle = ACCENT;
+        ctx.font = "700 20px ui-monospace, monospace";
+        ctx.textAlign = "right";
+        ctx.fillText("$" + fmtMoney(total), W - pad - cardPad, cy);
+        cy += 28;
+
+        // divider
+        ctx.strokeStyle = RULE; ctx.beginPath();
+        ctx.moveTo(pad + cardPad, cy); ctx.lineTo(W - pad - cardPad, cy); ctx.stroke();
+        cy += 8;
+
+        var startMin = timeStrToMinutes(entry.startTime);
+        entry.participants.forEach(function(p){
+          var mem = memberById(p.memberId);
+          var name = mem ? mem.name : "(deleted member)";
+          var color = mem ? mem.color : "#9C9484";
+          var joinClock = minutesToTimeStr(startMin + p.joinMinutes);
+          var leaveClock = minutesToTimeStr(startMin + p.leaveMinutes);
+          cy += lineH;
+          var rowY = cy - 14;
+          // swatch
+          ctx.fillStyle = color;
+          ctx.beginPath(); ctx.arc(pad + cardPad + 8, rowY - 5, 8, 0, Math.PI*2); ctx.fill();
+          // name
+          ctx.fillStyle = INK;
+          ctx.font = "18px -apple-system, sans-serif";
+          ctx.textAlign = "left";
+          ctx.fillText(name, pad + cardPad + 26, rowY);
+          // time range
+          ctx.fillStyle = MUTED;
+          ctx.font = "15px ui-monospace, monospace";
+          ctx.textAlign = "right";
+          ctx.fillText(joinClock + "–" + leaveClock, W - pad - cardPad - 90, rowY);
+          // amount
+          ctx.fillStyle = INK;
+          ctx.font = "700 17px ui-monospace, monospace";
+          ctx.fillText("$" + fmtMoney(costs[p.memberId]||0), W - pad - cardPad, rowY);
+        });
+        ctx.textAlign = "left";
+        y = cardTop + cardH;
+      });
+    }
+
+    return canvas.toDataURL("image/png");
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+  }
+
+  var imgOverlay = $("#imgOverlay");
+  $("#dayShotBtn").addEventListener("click", function(){
+    if (!selectedDayISO) return;
+    var dataUrl = renderDayImage(selectedDayISO);
+    $("#shotImg").src = dataUrl;
+    imgOverlay.classList.add("show");
+  });
+  $("#imgCloseBtn").addEventListener("click", function(){
+    imgOverlay.classList.remove("show");
+    $("#shotImg").src = "";
+  });
+  imgOverlay.addEventListener("click", function(e){
+    if (e.target === imgOverlay) { // tap backdrop to close
+      imgOverlay.classList.remove("show");
+      $("#shotImg").src = "";
+    }
+  });
+
   // ---------- member management ----------
   function renderMembers(){
     if (!state.members.length) {
-      $("#memberList").innerHTML = '<div class="empty-hint">还没有成员，点下面添加一个</div>';
+      $("#memberList").innerHTML = '<div class="empty-hint">No members yet. Add one below.</div>';
       return;
     }
     $("#memberList").innerHTML = state.members.map(function(m){
       return '<div class="member-row">'
         + '<span class="swatch" style="background:'+m.color+'"></span>'
         + '<span class="member-name">'+escapeHtml(m.name)+'</span>'
-        + '<button class="text-btn edit-member-btn" data-id="'+m.id+'">编辑</button>'
+        + '<button class="text-btn edit-member-btn" data-id="'+m.id+'">Edit</button>'
         + '</div>';
     }).join("");
     $$(".edit-member-btn").forEach(function(btn){
@@ -909,7 +1072,7 @@
       return '<div class="color-opt'+sel+'" style="background:'+c+'" data-color="'+c+'"></div>';
     }).join("");
     // custom RGB swatch — native colour wheel, accepts any value
-    var customHtml = '<label class="color-custom'+(isPreset?'':' selected')+'" id="colorCustom" style="background:'+customColor+'" title="自定义颜色">'
+    var customHtml = '<label class="color-custom'+(isPreset?'':' selected')+'" id="colorCustom" style="background:'+customColor+'" title="Custom colour">'
       + (isPreset ? '+' : '')
       + '<input type="color" id="colorCustomInput" value="'+customColor+'" />'
       + '</label>';
@@ -939,7 +1102,7 @@
   function openMemberSheet(memberId){
     editingMemberId = memberId;
     var m = memberId ? memberById(memberId) : null;
-    $("#memberSheetTitle").textContent = m ? "编辑成员" : "添加成员";
+    $("#memberSheetTitle").textContent = m ? "Edit Member" : "Add Member";
     $("#memberNameInput").value = m ? m.name : "";
     renderColorGrid(m ? m.color : COLORS[state.members.length % COLORS.length]);
     $("#memberDeleteBtn").style.display = m ? "block" : "none";
@@ -951,7 +1114,7 @@
 
   $("#memberSaveBtn").addEventListener("click", function(){
     var name = $("#memberNameInput").value.trim();
-    if (!name) { alert("请输入姓名"); return; }
+    if (!name) { alert("Please enter a name"); return; }
     var color = selectedMemberColor || COLORS[0];
 
     if (editingMemberId) {
@@ -967,7 +1130,7 @@
   });
 
   $("#memberDeleteBtn").addEventListener("click", function(){
-    if (!confirm("删除这个成员？已记录的历史账目不会被删除。")) return;
+    if (!confirm("Delete this member? Past entries already recorded will not be removed.")) return;
     state.members = state.members.filter(function(m){ return m.id !== editingMemberId; });
     saveState();
     renderMembers();
@@ -980,7 +1143,7 @@
     editingEntryId = entryId;
     var entry = entryId ? state.entries.find(function(e){ return e.id===entryId; }) : null;
 
-    $("#entrySheetTitle").textContent = entry ? "编辑账目" : "新增账目";
+    $("#entrySheetTitle").textContent = entry ? "Edit Entry" : "New Entry";
     $("#entryDateInput").value = entry ? entry.date : (presetDate || todayISO());
     $("#entryRateInput").value = entry ? entry.rate : lastUsedRate();
     if (entry) {
@@ -1016,7 +1179,7 @@
 
   function renderMemberChips(){
     if (!state.members.length) {
-      $("#memberChips").innerHTML = '<span style="font-size:12.5px; color:var(--muted);">请先在"成员"页添加人员</span>';
+      $("#memberChips").innerHTML = '<span style="font-size:12.5px; color:var(--muted);">Add people on the "Members" tab first</span>';
       return;
     }
     $("#memberChips").innerHTML = state.members.map(function(m){
@@ -1043,12 +1206,12 @@
 
   function renderParticipantList(){
     if (!entryFormParticipants.length) {
-      $("#participantList").innerHTML = '<div class="empty-hint" style="padding:14px 0;">在上面选择参与人</div>';
+      $("#participantList").innerHTML = '<div class="empty-hint" style="padding:14px 0;">Select participants above</div>';
       return;
     }
     $("#participantList").innerHTML = entryFormParticipants.map(function(p){
       var mem = memberById(p.memberId);
-      var name = mem ? mem.name : "未知";
+      var name = mem ? mem.name : "Unknown";
       var color = mem ? mem.color : "#9C9484";
       var startStr = $("#entryStartInput").value || "00:00";
       var endStr = $("#entryEndInput").value || "00:00";
@@ -1063,16 +1226,16 @@
         + '</div>'
         + '<div style="display:flex; gap:8px; margin-bottom:8px;">'
         + '<div style="flex:1;">'
-        + '<div style="font-size:10.5px; color:var(--muted); font-family:var(--mono); margin-bottom:3px;">到达</div>'
+        + '<div style="font-size:10.5px; color:var(--muted); font-family:var(--mono); margin-bottom:3px;">Arrive</div>'
         + '<input type="time" class="join-time-input" data-id="'+p.memberId+'" value="'+joinClock+'" min="'+startStr+'" max="'+endStr+'" style="width:100%; padding:4px 6px; font-size:12.5px; border:1px solid var(--rule); border-radius:6px; font-family:var(--mono); background:var(--paper-deep);" />'
         + '</div>'
         + '<div style="flex:1;">'
-        + '<div style="font-size:10.5px; color:var(--muted); font-family:var(--mono); margin-bottom:3px;">离开</div>'
+        + '<div style="font-size:10.5px; color:var(--muted); font-family:var(--mono); margin-bottom:3px;">Leave</div>'
         + '<input type="time" class="leave-time-input" data-id="'+p.memberId+'" value="'+leaveClock+'" min="'+startStr+'" max="'+endStr+'" style="width:100%; padding:4px 6px; font-size:12.5px; border:1px solid var(--rule); border-radius:6px; font-family:var(--mono); background:var(--paper-deep);" />'
         + '</div>'
         + '</div>'
         + '<div class="participant-controls" style="justify-content:flex-end;">'
-        + '<span class="cost-amount participant-cost" data-id="'+p.memberId+'">¥0.00</span>'
+        + '<span class="cost-amount participant-cost" data-id="'+p.memberId+'">$0.00</span>'
         + '</div>'
         + '</div>';
     }).join("");
@@ -1120,7 +1283,7 @@
     var costs = computeCosts(entryFormParticipants, rate);
     $$("#participantList .participant-cost").forEach(function(el){
       var id = el.getAttribute("data-id");
-      el.textContent = "¥" + fmtMoney(costs[id] || 0);
+      el.textContent = "$" + fmtMoney(costs[id] || 0);
     });
   }
 
@@ -1128,7 +1291,7 @@
     var rate = parseFloat($("#entryRateInput").value) || 0;
     var costs = computeCosts(entryFormParticipants, rate);
     var total = Object.values(costs).reduce(function(a,b){ return a+b; }, 0);
-    $("#entryTotalValue").textContent = "¥" + fmtMoney(total);
+    $("#entryTotalValue").textContent = "$" + fmtMoney(total);
     updateParticipantCosts();
   }
 
@@ -1150,17 +1313,17 @@
 
   $("#entrySaveBtn").addEventListener("click", function(){
     var date = $("#entryDateInput").value;
-    if (!date) { alert("请选择日期"); return; }
+    if (!date) { alert("Please pick a date"); return; }
     var rate = parseFloat($("#entryRateInput").value);
-    if (isNaN(rate) || rate < 0) { alert("请输入单价"); return; }
+    if (isNaN(rate) || rate < 0) { alert("Please enter a rate"); return; }
     var start = $("#entryStartInput").value;
     var end = $("#entryEndInput").value;
-    if (!start || !end) { alert("请选择开始和结束时间"); return; }
+    if (!start || !end) { alert("Please pick a start and end time"); return; }
     if (timeStrToMinutes(end) <= timeStrToMinutes(start)) {
-      alert("结束时间要晚于开始时间（暂不支持跨天）");
+      alert("End time must be later than start time (overnight not supported)");
       return;
     }
-    if (!entryFormParticipants.length) { alert("请至少选择一位参与人"); return; }
+    if (!entryFormParticipants.length) { alert("Please select at least one participant"); return; }
 
     var payload = {
       id: editingEntryId || uid(),
@@ -1183,7 +1346,7 @@
   });
 
   $("#entryDeleteBtn").addEventListener("click", function(){
-    if (!confirm("删除这条账目？")) return;
+    if (!confirm("Delete this entry?")) return;
     state.entries = state.entries.filter(function(e){ return e.id !== editingEntryId; });
     saveState();
     renderCalendar();
@@ -1198,7 +1361,7 @@
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
       a.href = url;
-      a.download = "计时账本备份-" + todayISO() + ".json";
+      a.download = "hourly-ledger-backup-" + todayISO() + ".json";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1218,32 +1381,32 @@
       var raw = reader.result;
       var parsed;
       try { parsed = JSON.parse(raw); }
-      catch(err) { alert("文件解析失败：" + err.message); return; }
+      catch(err) { alert("Failed to read file: " + err.message); return; }
 
       function applyImport(obj){
-        if (!confirm("导入会覆盖当前所有数据，确定继续吗？")) return;
+        if (!confirm("Importing will overwrite all current data. Continue?")) return;
         state = obj;
         saveState(); // re-encrypted under the CURRENT password
         migrateEntries();
         renderMembers();
         renderCalendar();
-        alert("导入成功");
+        alert("Import successful");
       }
 
       if (parsed && parsed.salt && parsed.iv && parsed.ct) {
         // encrypted backup — needs its own password to open
-        var pw = prompt("请输入该备份文件的密码：");
+        var pw = prompt("Enter the password for this backup file:");
         if (pw === null) return;
         decryptBlob(raw, pw).then(function(res){
           applyImport(res.state);
         }).catch(function(){
-          alert("密码错误，无法解密该备份");
+          alert("Wrong password — could not decrypt this backup");
         });
       } else if (parsed && Array.isArray(parsed.members) && Array.isArray(parsed.entries)) {
         // legacy plaintext backup
         applyImport(parsed);
       } else {
-        alert("文件格式不对，导入失败");
+        alert("Invalid file format — import failed");
       }
     };
     reader.readAsText(file);
@@ -1297,14 +1460,14 @@
     // mode: "create" (first run) | "enter" (returning, needs password)
     lockEl.style.display = "flex";
     var isCreate = mode === "create";
-    $("#lockTitle").textContent = isCreate ? "设置密码" : "输入密码";
+    $("#lockTitle").textContent = isCreate ? "Set a Password" : "Enter Password";
     $("#lockSubtitle").textContent = isCreate
-      ? "为你的账本设置一个密码，用来加密数据"
-      : "请输入密码以解锁你的账本";
+      ? "Set a password to encrypt your ledger data"
+      : "Enter your password to unlock your ledger";
     $("#lockInput2").style.display = isCreate ? "block" : "none";
-    $("#lockBtn").textContent = isCreate ? "设置并进入" : "解锁";
+    $("#lockBtn").textContent = isCreate ? "Set & Enter" : "Unlock";
     $("#lockHint").textContent = isCreate
-      ? "请记牢密码——数据已加密，忘记密码将无法找回。"
+      ? "Remember your password — data is encrypted and cannot be recovered if forgotten."
       : "";
     $("#lockErr").textContent = "";
     $("#lockInput").value = "";
@@ -1313,10 +1476,10 @@
 
     $("#lockBtn").onclick = function(){
       var pw = $("#lockInput").value;
-      if (!pw) { $("#lockErr").textContent = "请输入密码"; return; }
+      if (!pw) { $("#lockErr").textContent = "Please enter a password"; return; }
       if (isCreate) {
-        if (pw.length < 4) { $("#lockErr").textContent = "密码至少 4 位"; return; }
-        if (pw !== $("#lockInput2").value) { $("#lockErr").textContent = "两次输入的密码不一致"; return; }
+        if (pw.length < 4) { $("#lockErr").textContent = "Password must be at least 4 characters"; return; }
+        if (pw !== $("#lockInput2").value) { $("#lockErr").textContent = "Passwords do not match"; return; }
         setupNewPassword(pw).then(function(){
           rememberPassword(pw);
           unlockUI();
@@ -1328,7 +1491,7 @@
           rememberPassword(pw);
           unlockUI();
         }).catch(function(){
-          $("#lockErr").textContent = "密码错误";
+          $("#lockErr").textContent = "Wrong password";
           $("#lockInput").value = "";
           $("#lockInput").focus();
         });
@@ -1346,8 +1509,8 @@
     // it requires a "secure context" (https:// or http://localhost).
     if (!(window.crypto && window.crypto.subtle)) {
       lockEl.style.display = "flex";
-      $("#lockTitle").textContent = "无法启用加密";
-      $("#lockSubtitle").textContent = "此浏览器在直接打开本地文件时不支持加密功能。请通过网址（https）打开本页面，或换用 Safari / Chrome。";
+      $("#lockTitle").textContent = "Encryption Unavailable";
+      $("#lockSubtitle").textContent = "This browser doesn't support encryption when opening a local file directly. Please open this page via an https URL, or use Safari / Chrome.";
       $("#lockInput").style.display = "none";
       $("#lockInput2").style.display = "none";
       $("#lockBtn").style.display = "none";
