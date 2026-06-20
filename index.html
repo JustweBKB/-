@@ -10,9 +10,9 @@
 <style>
   :root {
     /* fonts shared by both themes — unified monospace (VS Code feel) */
-    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-    --serif: var(--mono);
-    --sans: var(--mono);
+    --mono: Arial, Helvetica, sans-serif;
+    --serif: Arial, Helvetica, sans-serif;
+    --sans: Arial, Helvetica, sans-serif;
 
     /* ===== corner radius (one switch controls all) ===== */
     /* rounded (default) */
@@ -154,8 +154,8 @@
   }
   .set-btn svg { flex-shrink:0; }
 
-  .tabs { display:flex; gap:6px; margin-top:10px; background: var(--paper-deep); padding:3px; border-radius:var(--r-md); border:1px solid var(--rule); }
-  .tab { flex:1; text-align:center; padding:7px 0; font-size:13px; border-radius:var(--r-sm); cursor:pointer; color: var(--muted); }
+  .tabs { display:flex; gap:0; margin-top:10px; background: var(--paper-deep); padding:0; border-radius:var(--r-md); border:1px solid var(--rule); overflow:hidden; }
+  .tab { flex:1 1 0; min-width:0; text-align:center; padding:9px 0; font-size:13px; cursor:pointer; color: var(--muted); }
   .tab.active { background: var(--ink); color: var(--paper); font-weight:600; }
 
   main {
@@ -1264,14 +1264,14 @@
     var y = pad + 24;
     // title
     ctx.fillStyle = INK;
-    ctx.font = "700 28px ui-monospace, Menlo, Consolas, monospace";
+    ctx.font = "700 28px Arial, Helvetica, sans-serif";
     ctx.textBaseline = "alphabetic";
     ctx.fillText(MONTH_ABBR[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear(), pad, y);
     y += 34;
 
     if (!dayEntries.length) {
       ctx.fillStyle = MUTED;
-      ctx.font = "18px ui-monospace, Menlo, Consolas, monospace";
+      ctx.font = "18px Arial, Helvetica, sans-serif";
       ctx.fillText("No entries for this day", pad, y + 30);
     } else {
       dayEntries.forEach(function(entry){
@@ -1289,11 +1289,11 @@
         var cy = cardTop + cardPad + 22;
         // entry header: rate/time + total
         ctx.fillStyle = MUTED;
-        ctx.font = "16px ui-monospace, monospace";
+        ctx.font = "16px Arial, Helvetica, sans-serif";
         ctx.textAlign = "left";
         ctx.fillText("$" + entry.rate + "/hr · " + entry.startTime + "–" + entry.endTime, pad + cardPad, cy);
         ctx.fillStyle = ACCENT;
-        ctx.font = "700 20px ui-monospace, monospace";
+        ctx.font = "700 20px Arial, Helvetica, sans-serif";
         ctx.textAlign = "right";
         ctx.fillText("$" + fmtMoney(total), W - pad - cardPad, cy);
         cy += 28;
@@ -1317,17 +1317,17 @@
           ctx.beginPath(); ctx.arc(pad + cardPad + 8, rowY - 5, 8, 0, Math.PI*2); ctx.fill();
           // name
           ctx.fillStyle = INK;
-          ctx.font = "18px ui-monospace, Menlo, Consolas, monospace";
+          ctx.font = "18px Arial, Helvetica, sans-serif";
           ctx.textAlign = "left";
           ctx.fillText(name, pad + cardPad + 26, rowY);
           // time range
           ctx.fillStyle = MUTED;
-          ctx.font = "15px ui-monospace, monospace";
+          ctx.font = "15px Arial, Helvetica, sans-serif";
           ctx.textAlign = "right";
           ctx.fillText(joinClock + "–" + leaveClock, W - pad - cardPad - 90, rowY);
           // amount
           ctx.fillStyle = INK;
-          ctx.font = "700 17px ui-monospace, monospace";
+          ctx.font = "700 17px Arial, Helvetica, sans-serif";
           ctx.fillText("$" + fmtMoney(costs[p.memberId]||0), W - pad - cardPad, rowY);
         });
         ctx.textAlign = "left";
