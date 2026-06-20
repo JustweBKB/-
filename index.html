@@ -192,7 +192,7 @@
   .minutes-input-row { display:flex; align-items:center; gap:5px; }
   .round-btn { width:24px; height:24px; border-radius:50%; border:1px solid var(--rule); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; font-family: var(--mono); flex-shrink:0; padding:0; }
   .minutes-input { width:42px; text-align:center; border:none; border-bottom:1px solid var(--rule); background:transparent; font-family: var(--mono); font-size:12.5px; }
-  .paid-toggle { font-size:11px; padding:5px 9px; border-radius:99px; cursor:pointer; border:1px solid var(--rule); font-family: var(--mono); white-space:nowrap; }
+  .paid-toggle { font-size:11px; padding:5px 9px; border-radius:99px; cursor:pointer; border:1px solid var(--rule); font-family: var(--mono); white-space:nowrap; display:inline-block; min-width:64px; text-align:center; box-sizing:border-box; }
   .paid-toggle.paid { background: var(--good); color:#fff; border-color: var(--good); }
   .cost-amount { font-family: var(--mono); font-weight:700; font-size:13px; width:48px; text-align:right; flex-shrink:0; }
 
@@ -289,7 +289,7 @@
 <div class="app">
   <header class="topbar">
     <div class="topbar-row">
-      <div class="brand">Hourly Ledger</div>
+      <div class="brand" id="brandTitle" title="Tap to rename">Hourly Ledger</div>
       <div class="icon-row">
         <button class="icon-btn" id="btnTheme" aria-label="Switch theme" title="Switch theme">🌙</button>
         <button class="icon-btn-wide" id="btnDownload" aria-label="Backup">
@@ -447,6 +447,63 @@
   var OLD_PLAIN_KEY = "hourlyLedgerData_v1"; // legacy un-encrypted (migrated once)
   var PW_REMEMBER_KEY = "ledger_pw_remember"; // this-device remembered password
   var THEME_KEY = "ledger_theme"; // "dark" | "paper"
+  var TITLE_KEY = "ledger_title"; // custom app title (this device)
+  var DEFAULT_TITLE = "Hourly Ledger";
+
+  // ---------- custom title ----------
+  function applyTitle(text){
+    text = (text || "").trim() || DEFAULT_TITLE;
+    var el = document.getElementById("brandTitle");
+    if (el) el.textContent = text;
+    document.title = text;
+    try { localStorage.setItem(TITLE_KEY, text); } catch(e) {}
+  }
+  function loadTitle(){
+    var t = DEFAULT_TITLE;
+    try { t = localStorage.getItem(TITLE_KEY) || DEFAULT_TITLE; } catch(e) {}
+    return t;
+  }
+  // apply saved title early so it doesn't flash the default
+  (function initTitleEarly(){
+    var el = document.getElementById("brandTitle");
+    if (el) el.textContent = loadTitle();
+    document.title = loadTitle();
+  })();
+  // tap the title → inline edit (iOS-safe; no native prompt)
+  (function wireTitleEdit(){
+    var el = document.getElementById("brandTitle");
+    if (!el) return;
+    el.addEventListener("click", function(){
+      var current = el.textContent;
+      var input = document.createElement("input");
+      input.type = "text";
+      input.value = current;
+      input.maxLength = 24;
+      input.setAttribute("aria-label", "App title");
+      input.style.cssText = "font:inherit; font-weight:700; width:11em; max-width:60vw; "
+        + "padding:2px 6px; border:1px solid var(--rule); border-radius:6px; "
+        + "background:var(--paper-deep); color:var(--ink);";
+      el.replaceWith(input);
+      input.focus();
+      input.select();
+      var done = false;
+      function commit(){
+        if (done) return; done = true;
+        applyTitle(input.value);
+        // rebuild the brand div with the saved value + re-wire
+        var div = document.createElement("div");
+        div.className = "brand"; div.id = "brandTitle"; div.title = "Tap to rename";
+        div.textContent = loadTitle();
+        input.replaceWith(div);
+        wireTitleEdit(); // re-attach click handler to the fresh element
+      }
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", function(e){
+        if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+        else if (e.key === "Escape") { input.value = current; input.blur(); }
+      });
+    });
+  })();
 
   // ---------- theme ----------
   function currentTheme(){
