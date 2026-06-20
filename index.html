@@ -814,6 +814,12 @@
   //   2: 30 min  $10.00
   //   ——————————
   //   Total: $20.00
+  // 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th", 11/12/13 -> "th"
+  function ordinal(n){
+    var s = ["th","st","nd","rd"], v = n % 100;
+    return n + (s[(v-20)%10] || s[v] || s[0]);
+  }
+
   function buildMemberDetail(memberId){
     var mem = memberById(memberId);
     var name = mem ? mem.name : "(deleted member)";
@@ -834,7 +840,7 @@
     var lines = days.map(function(day){
       var d = perDay[day];
       total += d.amount;
-      return day + ": " + d.minutes + " min  $" + fmtMoney(d.amount);
+      return ordinal(day) + ": " + d.minutes + " min  $" + fmtMoney(d.amount);
     });
     var header = MONTH_ABBR[calMonth] + " " + calYear + " — " + name;
     return [header].concat(lines)
@@ -1172,6 +1178,13 @@
       $("#entryEndInput").value = addHoursToTime(s, 2);
     }
     entryFormParticipants = entry ? entry.participants.map(function(p){ return Object.assign({}, p); }) : [];
+    // infer leaveAtEnd for legacy entries that predate the flag
+    if (entry) {
+      var capNow = currentTotalMinutes();
+      entryFormParticipants.forEach(function(p){
+        if (p.leaveAtEnd === undefined) p.leaveAtEnd = (p.leaveMinutes >= capNow);
+      });
+    }
 
     $("#entryDeleteBtn").style.display = entry ? "block" : "none";
 
@@ -1212,7 +1225,7 @@
         if (idx >= 0) {
           entryFormParticipants.splice(idx,1);
         } else {
-          entryFormParticipants.push({ memberId:id, joinMinutes:0, leaveMinutes: currentTotalMinutes(), paid:false });
+          entryFormParticipants.push({ memberId:id, joinMinutes:0, leaveMinutes: currentTotalMinutes(), paid:false, leaveAtEnd:true });
         }
         renderMemberChips();
         renderParticipantList();
@@ -1288,6 +1301,9 @@
         var p = entryFormParticipants.find(function(pp){ return pp.memberId===id; });
         picked = Math.max(0, Math.min(cap, picked));
         p.leaveMinutes = Math.max(picked, p.joinMinutes + 1);
+        // if they leave exactly at the end, treat as "stays till end" so it
+        // follows future time-range changes; otherwise pin to this value
+        p.leaveAtEnd = (p.leaveMinutes >= cap);
         renderParticipantList();
         updateEntryTotal();
       });
@@ -1316,7 +1332,12 @@
   function handleTimeRangeChange(){
     var cap = currentTotalMinutes();
     entryFormParticipants.forEach(function(p){
-      p.leaveMinutes = Math.min(p.leaveMinutes, cap);
+      if (p.leaveAtEnd) {
+        // "stays till end" — follow the new end time (extends up or down)
+        p.leaveMinutes = cap;
+      } else {
+        p.leaveMinutes = Math.min(p.leaveMinutes, cap);
+      }
       p.joinMinutes = Math.min(p.joinMinutes, cap);
       if (p.joinMinutes >= p.leaveMinutes) p.joinMinutes = Math.max(0, p.leaveMinutes - 1);
     });
@@ -1340,7 +1361,7 @@
       alert("End time must be later than start time (overnight not supported)");
       return;
     }
-    if (!entryFormParticipants.length) { alert("Please select at least one participant"); return; }
+    if (entryFormParticipants.length < 2) { alert("Please select at least two participants"); return; }
 
     var payload = {
       id: editingEntryId || uid(),
