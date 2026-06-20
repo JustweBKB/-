@@ -255,8 +255,14 @@
     <div class="topbar-row">
       <div class="brand">Hourly Ledger</div>
       <div class="icon-row">
-        <button class="icon-btn-wide" id="btnDownload">⬇ Backup</button>
-        <button class="icon-btn-wide" id="btnUpload">⬆ Import</button>
+        <button class="icon-btn-wide" id="btnDownload" aria-label="Backup">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          <span>Backup</span>
+        </button>
+        <button class="icon-btn-wide" id="btnUpload" aria-label="Import">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          <span>Import</span>
+        </button>
       </div>
     </div>
     <div id="storageWarning" style="display:none; font-size:11px; color:#C1432F; margin-top:8px; font-family:var(--mono);">
@@ -290,10 +296,34 @@
   <button class="fab" id="fabAdd">＋</button>
 </div>
 
-<input type="file" id="fileInput" accept="application/json,.json" />
+<input type="file" id="fileInput" accept=".json,application/json,text/plain,*/*" />
 
 <div class="overlay" id="overlay"></div>
 <div class="toast" id="toast"></div>
+
+<!-- import dialog: in-page (iOS standalone mode silently ignores native confirm/prompt) -->
+<div class="img-overlay" id="importOverlay">
+  <div class="img-overlay-inner" style="max-width:340px;">
+    <div class="lock-card" style="max-width:none;">
+      <h2 id="importTitle" style="font-family:var(--serif); font-size:19px; margin:0 0 4px;">Import Backup</h2>
+      <p id="importMsg" style="font-size:13px; color:var(--muted); margin:0 0 16px; line-height:1.6;"></p>
+      <input type="password" id="importPw" inputmode="text" autocomplete="off" placeholder="Backup password"
+        style="width:100%; padding:11px 12px; border:1px solid var(--rule); border-radius:9px; background:var(--paper-deep); font-size:16px; color:var(--ink); font-family:var(--mono); text-align:center; margin-bottom:10px; display:none;" />
+      <textarea id="manualCopyBox" readonly
+        style="width:100%; height:160px; padding:10px; border:1px solid var(--rule); border-radius:9px; background:var(--paper-deep); font-size:13px; color:var(--ink); font-family:var(--mono); margin-bottom:10px; display:none; resize:none;"></textarea>
+      <div id="importProgress" style="display:none; margin:10px 0;">
+        <div style="height:6px; background:var(--paper-deep); border-radius:99px; overflow:hidden;">
+          <div id="importBar" style="height:100%; width:0%; background:var(--good); transition:width 200ms ease;"></div>
+        </div>
+        <div id="importStatus" style="font-size:12px; color:var(--muted); margin-top:8px; font-family:var(--mono);"></div>
+      </div>
+      <div class="btn-row" id="importBtnRow" style="margin-top:14px;">
+        <button class="btn btn-ghost" id="importCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="importOkBtn">Import</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- generated-image viewer: shows the rendered PNG so the user can long-press to save/share -->
 <div class="img-overlay" id="imgOverlay">
@@ -605,29 +635,64 @@
     toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 1800);
   }
 
+  // iOS-safe copy. execCommand returns false (doesn't throw) on failure, and
+  // iOS needs setSelectionRange on a visible, non-off-screen textarea — so we
+  // only claim success when the copy actually reports success.
+  function legacyCopy(text){
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.contentEditable = "true";
+    ta.readOnly = false;
+    // keep on-screen but visually unobtrusive (iOS ignores off-screen selection)
+    ta.style.position = "fixed";
+    ta.style.top = "0";
+    ta.style.left = "0";
+    ta.style.width = "1px";
+    ta.style.height = "1px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    var range = document.createRange();
+    range.selectNodeContents(ta);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    ta.setSelectionRange(0, text.length);
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch(e) { ok = false; }
+    sel.removeAllRanges();
+    document.body.removeChild(ta);
+    return ok;
+  }
+
   function copyToClipboard(text){
-    function fallback(){
-      var ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.focus(); ta.select();
-      try {
-        document.execCommand("copy");
-        showToast("Copied summary to clipboard");
-      } catch(e) {
-        alert("Copy failed. Please copy manually:\n" + text);
-      }
-      document.body.removeChild(ta);
-    }
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function(){
         showToast("Copied summary to clipboard");
-      }).catch(fallback);
+      }).catch(function(){
+        // permission/context failed → try legacy, then fall back to manual
+        if (legacyCopy(text)) showToast("Copied summary to clipboard");
+        else showManualCopy(text);
+      });
     } else {
-      fallback();
+      if (legacyCopy(text)) showToast("Copied summary to clipboard");
+      else showManualCopy(text);
     }
+  }
+
+  // last resort: show the text in a selectable box so the user can copy by hand
+  function showManualCopy(text){
+    $("#importTitle").textContent = "Copy manually";
+    $("#importMsg").textContent = "Auto-copy was blocked. Select the text below and copy it.";
+    $("#importPw").style.display = "none";
+    $("#importProgress").style.display = "none";
+    var box = $("#manualCopyBox");
+    box.value = text;
+    box.style.display = "block";
+    $("#importBtnRow").style.display = "flex";
+    $("#importOkBtn").style.display = "none";
+    $("#importOkBtn").disabled = true;
+    importOverlay.classList.add("show");
+    setTimeout(function(){ box.focus(); box.select(); }, 50);
   }
 
   var elOverlay = $("#overlay");
@@ -1407,6 +1472,56 @@
     });
   });
 
+  // ---------- import (in-page dialog + progress; no native popups,
+  //            which iOS standalone mode silently swallows) ----------
+  var importOverlay = $("#importOverlay");
+  var pendingRaw = null, pendingParsed = null;
+
+  function showImportDialog(opts){
+    // opts: { msg, needPw, onOk }
+    $("#importTitle").textContent = "Import Backup";
+    $("#importMsg").textContent = opts.msg;
+    $("#importPw").style.display = opts.needPw ? "block" : "none";
+    $("#importPw").value = "";
+    $("#manualCopyBox").style.display = "none";
+    $("#importProgress").style.display = "none";
+    $("#importBar").style.width = "0%";
+    $("#importStatus").textContent = "";
+    $("#importBtnRow").style.display = "flex";
+    $("#importOkBtn").style.display = "";
+    $("#importOkBtn").disabled = false;
+    importOverlay.classList.add("show");
+    if (opts.needPw) $("#importPw").focus();
+    $("#importOkBtn").onclick = opts.onOk;
+  }
+
+  function setProgress(pct, status){
+    $("#importBtnRow").style.display = "none";
+    $("#importPw").style.display = "none";
+    $("#importProgress").style.display = "block";
+    $("#importBar").style.width = pct + "%";
+    $("#importStatus").textContent = status;
+  }
+
+  function finishImport(obj){
+    setProgress(40, "Decrypted. Saving…");
+    state = obj;
+    saveState(); // re-encrypted under the CURRENT password
+    setProgress(70, "Rebuilding…");
+    migrateEntries();
+    renderMembers();
+    renderCalendar();
+    setProgress(100, "Done ✓");
+    setTimeout(function(){
+      importOverlay.classList.remove("show");
+      showToast("Import successful");
+    }, 700);
+  }
+
+  function closeImport(){ importOverlay.classList.remove("show"); }
+  $("#importCancelBtn").addEventListener("click", closeImport);
+  importOverlay.addEventListener("click", function(e){ if (e.target === importOverlay) closeImport(); });
+
   $("#btnUpload").addEventListener("click", function(){
     $("#fileInput").click();
   });
@@ -1415,36 +1530,41 @@
     var file = e.target.files[0];
     if (!file) return;
     var reader = new FileReader();
+    reader.onerror = function(){ showToast("Could not read file"); };
     reader.onload = function(){
-      var raw = reader.result;
-      var parsed;
-      try { parsed = JSON.parse(raw); }
-      catch(err) { alert("Failed to read file: " + err.message); return; }
+      pendingRaw = reader.result;
+      try { pendingParsed = JSON.parse(pendingRaw); }
+      catch(err) { showImportDialog({ msg: "This file isn't valid JSON, can't import.", needPw:false, onOk: closeImport }); return; }
 
-      function applyImport(obj){
-        if (!confirm("Importing will overwrite all current data. Continue?")) return;
-        state = obj;
-        saveState(); // re-encrypted under the CURRENT password
-        migrateEntries();
-        renderMembers();
-        renderCalendar();
-        alert("Import successful");
-      }
-
-      if (parsed && parsed.salt && parsed.iv && parsed.ct) {
-        // encrypted backup — needs its own password to open
-        var pw = prompt("Enter the password for this backup file:");
-        if (pw === null) return;
-        decryptBlob(raw, pw).then(function(res){
-          applyImport(res.state);
-        }).catch(function(){
-          alert("Wrong password — could not decrypt this backup");
+      if (pendingParsed && pendingParsed.salt && pendingParsed.iv && pendingParsed.ct) {
+        // encrypted backup — needs its password
+        showImportDialog({
+          msg: "Enter the password for this backup. Importing overwrites all current data.",
+          needPw: true,
+          onOk: function(){
+            var pw = $("#importPw").value;
+            if (!pw) { $("#importMsg").textContent = "Please enter the backup password."; return; }
+            setProgress(15, "Decrypting…");
+            decryptBlob(pendingRaw, pw).then(function(res){
+              finishImport(res.state);
+            }).catch(function(){
+              $("#importProgress").style.display = "none";
+              $("#importBtnRow").style.display = "flex";
+              $("#importPw").style.display = "block";
+              $("#importPw").value = "";
+              $("#importMsg").textContent = "Wrong password — please try again.";
+            });
+          }
         });
-      } else if (parsed && Array.isArray(parsed.members) && Array.isArray(parsed.entries)) {
+      } else if (pendingParsed && Array.isArray(pendingParsed.members) && Array.isArray(pendingParsed.entries)) {
         // legacy plaintext backup
-        applyImport(parsed);
+        showImportDialog({
+          msg: "Import this backup? This overwrites all current data.",
+          needPw: false,
+          onOk: function(){ finishImport(pendingParsed); }
+        });
       } else {
-        alert("Invalid file format — import failed");
+        showImportDialog({ msg: "Unrecognised file format, can't import.", needPw:false, onOk: closeImport });
       }
     };
     reader.readAsText(file);
